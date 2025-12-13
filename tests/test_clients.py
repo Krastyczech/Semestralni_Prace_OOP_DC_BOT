@@ -44,7 +44,7 @@ MOCK_HISTORICAL_DATA_SUCCESS = {"date": "2020-12-13", "max_temp": 15.0}
 
 @pytest.mark.asyncio
 # Patchování interních metod klienta s nastavenými návratovými hodnotami (Mocking)
-@patch('api_clients.weather_client.WeatherClient._fetch_historical_weather', return_value=MOCK_HISTORICAL_DATA_SUCCESS)
+@patch('api_clients.weather_client.WeatherClient._fetch_historical_weather_open_meteo', return_value=MOCK_HISTORICAL_DATA_SUCCESS)
 @patch('api_clients.weather_client.WeatherClient._fetch_current_weather', return_value=MOCK_CURRENT_DATA_SUCCESS)
 @patch('api_clients.weather_client.WeatherClient._geocode_city', return_value=MOCK_GEOCODE_SUCCESS)
 async def test_full_weather_data_success(mock_geocode, mock_current, mock_historical):

@@ -89,7 +89,7 @@ async def pocasi(ctx, *, city: str):
             comparison = f"o **{diff_abs_formatted}°C méně**"
 
         historical_summary = (
-            f", což je {comparison} než v červnu 2024 (tehdy **{hist_temp}°C**)."
+            f", což je {comparison} než před rokem (tehdy **{hist_temp}°C**)."
         )
     else:
         historical_summary = ". Archivní data pro srovnání nejsou dostupná."
@@ -102,7 +102,7 @@ async def pocasi(ctx, *, city: str):
 
     # c) Generování embedu
     embed = discord.Embed(
-        title=f"🌡️☀️ Komplexní Počasí a Historie pro {validated_city}",
+        title=f"☀️ Aktuální Počasí a historie pro {validated_city}",
         description=response_sentence,
         color=int(color_hex.strip("#"), 16)  # Barva dle AQI
     )
