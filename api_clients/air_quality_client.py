@@ -73,6 +73,23 @@ class AirQualityClient:
                 print(f"Neočekávaná chyba při zpracování AQI dat: {e}")
                 return None
 
+    def get_aqi_status(self, aqi: int) -> tuple[str, str]:
+        """
+        Vrátí status kvality ovzduší a barvu pro embed na základě AQI hodnoty.
+        """
+        if aqi <= 50:
+            return "Dobrá", "#00ff00"
+        elif aqi <= 100:
+            return "Uspokojivá", "#ffff00"
+        elif aqi <= 150:
+            return "Nevhodná pro citlivé skupiny", "#ff8000"
+        elif aqi <= 200:
+            return "Nevhodná", "#ff0000"
+        elif aqi <= 300:
+            return "Velmi nevhodná", "#800080"
+        else:
+            return "Nebezpečná", "#800000"
+
 # ----------------------------------------------------
 # PŘÍKLAD TESTOVÁNÍ FUNKČNOSTI (OOP Zásada: Základní test)
 # ----------------------------------------------------
