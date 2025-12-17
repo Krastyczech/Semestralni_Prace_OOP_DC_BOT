@@ -34,6 +34,7 @@ Tento projekt je Discord bot zaměřený na poskytování informací o počasí 
     python main.py
 
 **Používané příkazy**
+
 !pocasi <město> – Detailní info o počasí (aktuální stav + srovnání s loňským rokem).
 
 !add <město> – Přidá město do seznamu pro automatický monitoring nebezpečných jevů.
@@ -41,6 +42,8 @@ Tento projekt je Discord bot zaměřený na poskytování informací o počasí 
 !remove <město> – Odebere město ze seznamu sledovaných míst.
 
 !list – Zobrazí seznam všech aktuálně monitorovaných měst.
+
+
 
 **Autor**
 
