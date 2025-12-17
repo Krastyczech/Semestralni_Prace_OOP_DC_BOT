@@ -1,24 +1,49 @@
 # main.py - ČISTÁ VERZE
 
+import json
 import os
 from discord.ext import commands
+from discord.ext import tasks
 from dotenv import load_dotenv
 import discord
+import asyncio
 
 # LOKÁLNÍ IMPORT - TENTO UŽ TEĎ BUDE FUNGOVAT
 from api_clients.air_quality_client import AirQualityClient
 from api_clients.weather_client import WeatherClient
 
+MONITORED_CITIES_FILE = "monitored_cities.json"
+
+# WMO kódy pro nebezpečné počasí
+SEVERE_CODES = {
+    95: "Bouřka (mírná) ⛈️",
+    96: "Bouřka se krupobitím ⛈️",
+    99: "Silná bouřka s krupobitím ⛈️",
+    65: "Silný déšť 🌧️",
+    82: "Extrémní přeháňky 🌧️"
+}
+
+
+def load_cities():
+    if os.path.exists(MONITORED_CITIES_FILE):
+        with open(MONITORED_CITIES_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return ["Praha"]
+
+
+monitored_cities = load_cities()
+
+
+def save_cities():
+    with open(MONITORED_CITIES_FILE, "w", encoding="utf-8") as f:
+        json.dump(monitored_cities, f, ensure_ascii=False, indent=4)
+
 
 # Načtení proměnných prostředí ze souboru .env
 load_dotenv()
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
-# Ostatní nastavení z .env, pokud je potřebujeme hned:
-# AQI_CLIENT_TOKEN je načten v AirQualityClient.py
-# AQI_THRESHOLD = int(os.getenv('AQI_THRESHOLD'))
 
-
-# Důležité: Aktivace intents pro čtení obsahu zpráv
+# Aktivace intents pro čtení obsahu zpráv
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
@@ -27,20 +52,55 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 aqi_client = AirQualityClient()  # Inicializace klienta (Zapouzdření API)
 weather_client = WeatherClient()  # Inicializace klienta (Zapouzdření API)
 
+last_alerts = {}  # Ukládá poslední alerty pro města
+
+
+@tasks.loop(minutes=30)
+async def weather_monitor_task():
+    for city in monitored_cities:
+        data, _ = await weather_client.get_weather_data(city)
+        if not data:
+            continue
+
+        current = data['current']
+        w_code = current.get('weather_code')
+
+        # --- LOGIKA PROTI OPAKOVANÝM ALERTŮM ---
+        # Pokud je aktuální kód stejný jako ten, co jsme nahlásili minule, město přeskočíme
+        if last_alerts.get(city) == w_code:
+            continue
+
+        last_alerts[city] = w_code  # Aktualizujeme poslední alert
+
+        # Pokud je zjištěno nebezpečné počasí
+        if w_code in SEVERE_CODES:
+            # Najdeme kanál 'alert' na všech serverech, kde bot je
+            for guild in bot.guilds:
+                channel = discord.utils.get(guild.text_channels, name="alert")
+                if channel:
+                    alert_msg = SEVERE_CODES[w_code]
+                    await channel.send(f"🚨 **VAROVÁNÍ - {city}**: {alert_msg} ({current['temperature']}°C)")
+
+        await asyncio.sleep(2)  # Šetříme API mezi jednotlivými městy
+
 
 @bot.event
 async def on_ready():
     # Spustí se při úspěšném připojení bota k Discordu.
     print(f'🤖 Bot je připojen jako: {bot.user.name}')
 
+
+@bot.event
+async def on_ready():
+    print(f'🤖 {bot.user.name} je připojen a monitoruje počasí.')
+    if not weather_monitor_task.is_running():
+        weather_monitor_task.start()
 # REAKTIVNÍ ČÁST: Příkaz pro komplexní Počasí (Standardizovaný název funkce)
 
 
 @bot.command()
 async def pocasi(ctx, *, city: str):
     """Reaktivní příkaz: Získá a zobrazí aktuální a historické počasí + AQI."""
-
-    # await ctx.send(f"Zpracovávám požadavek na komplexní data pro: **{city.title()}**...")
 
     # -------------------------------------------------------------------
     # 1. Získání Počasí (Aktuální + Historické)
@@ -60,7 +120,7 @@ async def pocasi(ctx, *, city: str):
     # -------------------------------------------------------------------
     # 2. Získání Kvality Ovzduší (AQI)
     # -------------------------------------------------------------------
-    # Předpokládáme, že AQI je pro celé město (Praha, Brno atd.)
+    # Předpoklad: AQI je pro celé město (Praha, Brno atd.)
     aqi_value = await aqi_client.get_current_aqi(validated_city)
 
     if aqi_value is not None:
@@ -117,11 +177,40 @@ async def pocasi(ctx, *, city: str):
     await ctx.send(embed=embed)
 
 
+@bot.command(name="add")  # pridani mesta do monitoringu
+async def add_city(ctx, *, city: str):
+    city = city.strip().title()
+    if city not in monitored_cities:
+        monitored_cities.append(city)
+        save_cities()
+        await ctx.send(f"✅ Město **{city}** přidáno do monitoringu.")
+    else:
+        await ctx.send(f"Město {city} už v seznamu je.")
+
+
+@bot.command(name="remove")  # odebrani mesta z monitoringu
+async def remove_city(ctx, *, city: str):
+    city = city.strip().title()
+    if city in monitored_cities:
+        monitored_cities.remove(city)
+        save_cities()
+        await ctx.send(f"🗑️ Město **{city}** odebráno.")
+    else:
+        await ctx.send(f"Město {city} v seznamu není.")
+
+
+@bot.command(name="list")  # vypsani sledovanych mest
+async def list_cities(ctx):
+    cities_str = "\n".join(
+        [f"• {c}" for c in monitored_cities]) or "Seznam je prázdný."
+    await ctx.send(f"**Sledovaná města:**\n{cities_str}")
+
 # REAKTIVNÍ ČÁST: Původní příkaz pro AQI
+
+
 @bot.command()
 async def aqi(ctx, *, city: str):
     """Původní příkaz, který by měl být nyní přesměrován na !pocasi."""
-    # Můžete zde buď nechat původní logiku AQI, nebo:
     await ctx.send("Tento příkaz byl přesunut do !pocasi <město> pro komplexní odpověď.")
 
 # Spuštění bota

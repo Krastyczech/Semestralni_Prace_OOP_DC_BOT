@@ -2,7 +2,7 @@
 
 import pytest
 import asyncio
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, AsyncMock
 
 # Důležité: Import vašich tříd
 from api_clients.air_quality_client import AirQualityClient
@@ -34,11 +34,11 @@ def test_aqi_status_spatna():
 # --- B) ASYNCHRONNÍ TEST S MOCKINGEM (Simulace Úspěšného API Toku) ---
 
 
-# 1. Definice simulovaných (fejkových) dat pro všechny volané interní metody
+# 1. Definice simulovaných dat pro všechny volané interní metody
 MOCK_GEOCODE_SUCCESS = (50.08, 14.43, "MockMěsto")  # lat, lon, validated_name
 MOCK_CURRENT_DATA_SUCCESS = {"temperature": 12.5,
                              "precipitation": 0.0, "description": "Polojasno ☁️"}
-# Fejkové historické srovnání
+# Simulované historické srovnání
 MOCK_HISTORICAL_DATA_SUCCESS = {"date": "2020-12-13", "max_temp": 15.0}
 
 
@@ -84,3 +84,21 @@ async def test_full_weather_data_geocode_failure(mock_geocode):
     # Ověření chybového stavu
     assert result is None
     assert "Město 'Neznaméměsto' nebylo nalezeno" in error
+
+
+@pytest.mark.asyncio
+async def test_monitor_deduplication():
+    # Simulujeme, že v Praze už jedna bouřka (95) byla nahlášena
+    from main import last_alerts, weather_monitor_task
+    last_alerts["Praha"] = 95
+
+    # Nastavíme mock data, která vrací stejný kód (95)
+    mock_data = {"current": {"weather_code": 95,
+                             "temperature": 15}, "city_name": "Praha"}
+
+    with patch('api_clients.weather_client.WeatherClient.get_weather_data', AsyncMock(return_value=(mock_data, None))):
+        with patch('discord.utils.get') as mock_get_channel:
+            # Spustíme jeden průchod monitoru
+            await weather_monitor_task.coro()
+            # Ověříme, že kanál pro alerty nebyl získán (protože by neměl být odeslán žádný alert)
+            assert mock_get_channel.called is False

@@ -89,19 +89,3 @@ class AirQualityClient:
             return "Velmi nevhodná", "#800080"
         else:
             return "Nebezpečná", "#800000"
-
-# ----------------------------------------------------
-# PŘÍKLAD TESTOVÁNÍ FUNKČNOSTI (OOP Zásada: Základní test)
-# ----------------------------------------------------
-# if __name__ == "__main__":
-#     import asyncio
-#
-#     async def test_aqi():
-#         client = AirQualityClient()
-#         aqi = await client.get_current_aqi("prague")
-#         if aqi is not None:
-#             print(f"Aktuální AQI pro Prahu: {aqi}")
-#         else:
-#             print("Nepodařilo se získat AQI.")
-#
-#     asyncio.run(test_aqi())

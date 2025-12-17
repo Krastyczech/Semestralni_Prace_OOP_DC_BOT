@@ -1,7 +1,6 @@
 import aiohttp
 import asyncio
 from datetime import datetime, timedelta, date
-# Import pro synchronní historická data (Meteostat)
 
 
 class WeatherClient:
@@ -21,20 +20,12 @@ class WeatherClient:
 
         lat, lon, validated_city_name = result
 
-        # 2. Asynchronní příprava úloh
+        # 2. Asynchronní příprava úloh (TADY BYLO TO POMÍCHANÉ)
         current_task = self._fetch_current_weather(lat, lon)
-        # Nové: Voláme asynchronní Open-Meteo Archive API
         historical_task = self._fetch_historical_weather_open_meteo(lat, lon)
-
-        # Předpokládáme, že AQI klient je inicializován v main.py a volán ZDE.
-        # ALE: Pokud AQI data získáváte v main.py (viz Váš původní kód),
-        # MUSÍME PŘEDAT AQI ZPĚT DO MAIN.PY.
-        # Pro zjednodušení teď budeme počítat s tím, že AQI se získá v main.py,
-        # tak jako v původní verzi, a zde se soustředíme jen na počasí.
 
         try:
             # 3. Spuštění obou úloh současně (konkurentně)
-            # Tímto se zbavíme asyncio.to_thread!
             current_data, historical_data = await asyncio.gather(current_task, historical_task)
         except Exception as e:
             print(f"Chyba při souběžném získávání dat: {e}")
@@ -55,7 +46,7 @@ class WeatherClient:
 
     async def _geocode_city(self, city: str):
         """Převádí název města na lat/lon a vrátí korektní název."""
-        # Použijeme Open-Meteo Geocoding, které je spolehlivější než Nominatim
+        # Použity Open-Meteo Geocoding
         GEO_URL = f"https://geocoding-api.open-meteo.com/v1/search?name={city}&count=1&language=cs&format=json"
         print(f"Geocoding city: {city}")
         async with aiohttp.ClientSession() as session:
@@ -79,11 +70,9 @@ class WeatherClient:
                 print(f"Chyba Geokódování: {e}")
                 return None
 
-    # DŮLEŽITÉ: Tato funkce je SYNCHRONNÍ (chybí 'async'),
-    # protože ji spouštíme přes asyncio.to_thread
     async def _fetch_historical_weather_open_meteo(self, lat: float, lon: float) -> dict | None:
         """
-        Získá maximální denní teplotu ze stejného data před 5 lety 
+        Získá maximální denní teplotu ze stejného data před 5 lety
         pomocí Open-Meteo Archive API (ERA5 Reanalysis).
         """
         try:
@@ -117,31 +106,24 @@ class WeatherClient:
             print(f"Chyba při stahování historických dat z Open-Meteo: {e}")
             return None
 
-    async def _fetch_current_weather(self, lat, lon):
-        """Získá aktuální teplotu, srážky a počasí z Open-Meteo."""
-        URL = (
-            f"https://api.open-meteo.com/v1/forecast?"
-            f"latitude={lat}&longitude={lon}&current=temperature_2m,precipitation,weather_code&timezone=auto"
-        )
-        async with aiohttp.ClientSession() as session:
-            try:
-                async with session.get(URL) as response:
-                    data = await response.json()
-                    if response.status != 200 or 'current' not in data:
-                        return None
+    async def _fetch_current_weather(self, lat: float, lon: float):
+        url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as response:
+                    response.raise_for_status()
+                    data = await response.json()  # Tady se definuje to 'data'
 
-                    current = data['current']
-                    weather_description = self._get_weather_description(
-                        current.get('weather_code'))
-
+                    cw = data.get("current_weather", {})
                     return {
-                        "temperature": current.get('temperature_2m'),
-                        "precipitation": current.get('precipitation'),
-                        "description": weather_description
+                        "temperature": cw.get("temperature"),
+                        # Důležité pro monitoring!
+                        "weather_code": cw.get("weathercode"),
+                        "description": self._get_weather_description(cw.get("weathercode", 0))
                     }
-            except aiohttp.ClientError as e:
-                print(f"Chyba aktuálního počasí: {e}")
-                return None
+        except Exception as e:
+            print(f"Chyba při fetchování aktuálního počasí: {e}")
+            return None
 
     def _get_weather_description(self, code: int) -> str:
         """Převádí WMO kód na čitelný popis (zjednodušená verze)."""
