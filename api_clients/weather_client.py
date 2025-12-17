@@ -107,16 +107,18 @@ class WeatherClient:
             return None
 
     async def _fetch_current_weather(self, lat: float, lon: float):
-        url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
+        url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=precipitation,temperature,weathercode"
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url) as response:
                     response.raise_for_status()
                     data = await response.json()  # Tady se definuje to 'data'
 
-                    cw = data.get("current_weather", {})
+                    cw = data.get("current", {})
                     return {
                         "temperature": cw.get("temperature"),
+                        # Přidáno, výchozí 0.0 pokud není
+                        "precipitation": cw.get("precipitation", 0.0),
                         # Důležité pro monitoring!
                         "weather_code": cw.get("weathercode"),
                         "description": self._get_weather_description(cw.get("weathercode", 0))
